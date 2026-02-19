@@ -1,0 +1,96 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  password      String?
+  role          String    @default("user") // "user" | "admin"
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  sessions      Session[]
+  auditSessions AuditSession[]
+  accounts      Account[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model AuditSession {
+  id          String   @id @default(cuid())
+  userId      String
+  status      String   @default("in_progress") // "in_progress" | "generating" | "completed" | "failed"
+  currentDomain Int    @default(1) // 1-9
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  completedAt DateTime?
+
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  responses AuditResponse[]
+  report    AuditReport?
+}
+
+model AuditResponse {
+  id             String   @id @default(cuid())
+  auditSessionId String
+  domain         Int      // 1-9
+  answers        String   // JSON string of Q&A pairs for this domain
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  auditSession AuditSession @relation(fields: [auditSessionId], references: [id], onDelete: Cascade)
+
+  @@unique([auditSessionId, domain])
+}
+
+model AuditReport {
+  id             String   @id @default(cuid())
+  auditSessionId String   @unique
+  automationMap  String   // JSON string
+  implGuide      String   // JSON string
+  pdfPath        String?  // path to generated PDF
+  emailedAt      DateTime?
+  createdAt      DateTime @default(now())
+
+  auditSession AuditSession @relation(fields: [auditSessionId], references: [id], onDelete: Cascade)
+}
