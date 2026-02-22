@@ -1,5 +1,3 @@
-import Anthropic from "@anthropic-ai/sdk";
-
 // ─── TypeScript Types ─────────────────────────────────────────────────────────
 
 export interface AutomationOpportunity {
@@ -128,18 +126,6 @@ Return a valid JSON object with this exact structure:
 
 Be specific. Reference the user's actual tools and workflows. Never invent tools that don't exist. Always include at least one free option. Return only the JSON object with no additional text.`;
 
-// ─── Anthropic Singleton ──────────────────────────────────────────────────────
-
-const globalForAnthropic = globalThis as unknown as { anthropic: Anthropic };
-
-const anthropic =
-  globalForAnthropic.anthropic ||
-  new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-
-if (process.env.NODE_ENV !== "production") {
-  globalForAnthropic.anthropic = anthropic;
-}
-
 // ─── Generate Report ──────────────────────────────────────────────────────────
 
 export async function generateAuditReport(
@@ -159,25 +145,34 @@ export async function generateAuditReport(
     })
     .join("\n\n");
 
-  const message = await anthropic.messages.create({
-    model: "claude-sonnet-4-5",
-    max_tokens: 8192,
-    system: SYSTEM_PROMPT,
-    messages: [
-      {
-        role: "user",
-        content: `Here are my 9-domain life audit answers. Please analyze them and provide my personalized automation roadmap:\n\n${userPrompt}`,
-      },
-    ],
+  const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
+      "HTTP-Referer": "https://life-audit-app.vercel.app",
+      "X-Title": "LifeAudit AI",
+    },
+    body: JSON.stringify({
+      model: "anthropic/claude-sonnet-4.6",
+      max_tokens: 8192,
+      messages: [
+        { role: "system", content: SYSTEM_PROMPT },
+        {
+          role: "user",
+          content: `Here are my 9-domain life audit answers. Please analyze them and provide my personalized automation roadmap:\n\n${userPrompt}`,
+        },
+      ],
+    }),
   });
 
-  const block = message.content[0];
-  if (block.type !== "text") {
-    throw new Error("Unexpected response type from Claude API");
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`OpenRouter error: ${response.status} ${errText.substring(0, 200)}`);
   }
 
-  // Strip markdown code fences if present
-  let raw = block.text.trim();
+  const aiData = await response.json();
+  let raw = aiData.choices[0].message.content.trim();
   const fenceMatch = raw.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
   if (fenceMatch) raw = fenceMatch[1];
 
