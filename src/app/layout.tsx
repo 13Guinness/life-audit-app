@@ -4,6 +4,7 @@ import { Providers } from "@/components/Providers"
 import { Nav } from "@/components/Nav"
 
 export const metadata: Metadata = {
+  icons: { icon: "/favicon.svg" },
   title: "LifeAudit AI",
   description: "Discover Every Way AI Can Save You Time",
 }
